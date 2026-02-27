@@ -1,6 +1,9 @@
+// server.js
 const app = require("./app");
 const env = require("./config/env");
 
-app.listen(env.PORT, () => {
-  console.log(`API running on http://localhost:${env.PORT}`);
+const PORT = process.env.PORT || env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`API running on port ${PORT}`);
 });
