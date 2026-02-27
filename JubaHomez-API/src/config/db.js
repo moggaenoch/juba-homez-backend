@@ -9,12 +9,7 @@ const pool = mysql.createPool({
   port: env.DB_PORT,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
 });
 
-async function query(sql, params = []) {
-  const [rows] = await pool.execute(sql, params);
-  return rows;
-}
-
-module.exports = { pool, query };
+module.exports = pool;
