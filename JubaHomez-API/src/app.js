@@ -92,6 +92,12 @@ app.get("/health", (_req, res) => {
  */
 app.use("/api/v1", routes);
 
+app.get("/db-test", async (_req, res) => {
+  const db = require("./config/db");
+  const [rows] = await db.query("SHOW TABLES");
+  res.json({ ok: true, tables: rows });
+});
+
 /**
  * 9) 404 handler
  */
