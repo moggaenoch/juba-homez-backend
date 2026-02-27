@@ -1,118 +1,80 @@
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const morgan = require("morgan");
-const rateLimit = require("express-rate-limit");
-const path = require("path");
+/* assets/js/config.js
+   JUBA HOMEZ - Frontend App Config (Render + Local)
+*/
+(() => {
+  "use strict";
 
+  const hostname = window.location.hostname;
+  const isLocal =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".local");
 
-const env = require("./config/env");
-const routes = require("./routes");
-const { errorMiddleware } = require("./middlewares/error.middleware");
+  // Local backend (change port if yours differs)
+  // ✅ Your backend mounts routes at /api/v1
+  const DEV_API_BASE_URL = "http://localhost:5000/api/v1";
 
-const app = express();
+  // ✅ Render backend (your live API)
+  const PROD_API_BASE_URL = "https://juba-homez-backend.onrender.com/api/v1";
 
-/**
- * 1) Security + Logging
- */
-app.use(helmet());
-app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
+  const API_BASE_URL = isLocal ? DEV_API_BASE_URL : PROD_API_BASE_URL;
 
-/**
- * 2) CORS (important for GitHub Pages)
- * - Add your GitHub Pages URL to FRONTEND_URL in Render env vars
- * - Example: FRONTEND_URL=https://moggaenoch.github.io
- */
-const allowedOrigins = [
-  env.FRONTEND_URL, // production frontend (GitHub Pages / custom domain)
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "http://localhost:5500",
-  "http://127.0.0.1:5500"
-].filter(Boolean);
-
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      // Allow non-browser clients (Postman/curl) with no origin
-      if (!origin) return cb(null, true);
-
-      // Allow if origin is in allowlist
-      if (allowedOrigins.includes(origin)) return cb(null, true);
-
-      return cb(new Error(`CORS blocked for origin: ${origin}`), false);
+  window.APP_CONFIG = {
+    API_BASE_URL,
+    APP_NAME: "JUBA HOMEZ",
+    VERSION: "1.0.0",
+    STORAGE_KEYS: {
+      ACCESS_TOKEN: "jh_access_token",
+      REFRESH_TOKEN: "jh_refresh_token",
+      USER: "jh_user",
     },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: false // set to true only if you use cookies/sessions across domains
-  })
-);
+    FEATURES: {
+      DEBUG_LOGS: isLocal,
+    },
+    utils: {
+      isLocal,
 
-/**
- * 3) Body parsing
- */
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true }));
+      apiUrl(path = "") {
+        const base = String(API_BASE_URL || "").replace(/\/+$/, "");
+        const p = String(path || "");
+        if (!p) return base;
+        return p.startsWith("/") ? `${base}${p}` : `${base}/${p}`;
+      },
 
-/**
- * 4) Rate limiting (safe defaults if env is missing)
- */
-app.use(
-  rateLimit({
-    windowMs: Number(env.RATE_LIMIT_WINDOW_MS || 60_000),
-    max: Number(env.RATE_LIMIT_MAX || 120),
-    standardHeaders: true,
-    legacyHeaders: false
-  })
-);
+      getAccessToken() {
+        return localStorage.getItem("jh_access_token");
+      },
 
-/**
- * 5) Static files (uploads)
- * Ensure you have an /uploads folder in your project root if you use this.
- */
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+      setAccessToken(token) {
+        if (!token) localStorage.removeItem("jh_access_token");
+        else localStorage.setItem("jh_access_token", token);
+      },
 
-/**
- * 6) Root route to avoid "Cannot GET /"
- */
-app.get("/", (_req, res) => {
-  res
-    .status(200)
-    .send("JubaHomez API is running ✅ Try /health or /api/v1");
-});
+      clearAuth() {
+        localStorage.removeItem("jh_access_token");
+        localStorage.removeItem("jh_refresh_token");
+        localStorage.removeItem("jh_user");
+      },
 
-/**
- * 7) Health check
- */
-app.get("/health", (_req, res) => {
-  res.status(200).json({
-    ok: true,
-    uptime: process.uptime(),
-    env: env.NODE_ENV || "unknown"
-  });
-});
+      getAuthHeaders(extra = {}) {
+        const token = localStorage.getItem("jh_access_token");
+        const headers = { "Content-Type": "application/json", ...extra };
+        if (token) headers.Authorization = `Bearer ${token}`;
+        return headers;
+      },
+    },
+  };
 
-/**
- * 8) API routes
- * Your routes should be mounted under /api/v1
- */
-app.use("/api/v1", routes);
-
-/**
- * 9) 404 handler (nice for debugging)
- */
-app.use((req, res) => {
-  res.status(404).json({
-    ok: false,
-    message: "Route not found",
-    method: req.method,
-    path: req.originalUrl
-  });
-});
-
-/**
- * 10) Error handler (your existing middleware)
- */
-app.use(errorMiddleware);
-
-module.exports = app;
+  // Validate + log (only locally)
+  try {
+    new URL(window.APP_CONFIG.API_BASE_URL);
+    if (window.APP_CONFIG.FEATURES.DEBUG_LOGS) {
+      console.log("APP_CONFIG loaded:", window.APP_CONFIG);
+    }
+  } catch {
+    console.error(
+      "APP_CONFIG.API_BASE_URL is invalid or missing:",
+      window.APP_CONFIG.API_BASE_URL
+    );
+  }
+})();
