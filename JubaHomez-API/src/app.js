@@ -10,11 +10,7 @@
     hostname === "127.0.0.1" ||
     hostname.endsWith(".local");
 
-  // Local backend (change port if yours differs)
-  // ✅ Your backend mounts routes at /api/v1
   const DEV_API_BASE_URL = "http://localhost:5000/api/v1";
-
-  // ✅ Render backend (your live API)
   const PROD_API_BASE_URL = "https://juba-homez-backend.onrender.com/api/v1";
 
   const API_BASE_URL = isLocal ? DEV_API_BASE_URL : PROD_API_BASE_URL;
@@ -23,6 +19,10 @@
     API_BASE_URL,
     APP_NAME: "JUBA HOMEZ",
     VERSION: "1.0.0",
+
+    // ✅ ADD THIS (helps Render cold start / slow network)
+    REQUEST: { TIMEOUT_MS: 60000 },
+
     STORAGE_KEYS: {
       ACCESS_TOKEN: "jh_access_token",
       REFRESH_TOKEN: "jh_refresh_token",
@@ -65,7 +65,6 @@
     },
   };
 
-  // Validate + log (only locally)
   try {
     new URL(window.APP_CONFIG.API_BASE_URL);
     if (window.APP_CONFIG.FEATURES.DEBUG_LOGS) {
