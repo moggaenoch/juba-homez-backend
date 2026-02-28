@@ -13,7 +13,12 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-//  This is what all your controllers expect
+/**
+ * ✅ IMPORTANT:
+ * - returns ONLY rows for SELECT
+ * - returns ResultSetHeader for INSERT/UPDATE (includes insertId)
+ * - avoids using pool.query() directly (which returns [rows, fields])
+ */
 async function query(sql, params = []) {
   const [rows] = await pool.execute(sql, params);
   return rows;
