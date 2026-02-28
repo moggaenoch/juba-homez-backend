@@ -1,4 +1,4 @@
-// src/config/db.js
+// JubaHomez-API/src/config/db.js
 const mysql = require("mysql2/promise");
 const env = require("./env");
 
@@ -13,12 +13,7 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-/**
- * ✅ IMPORTANT:
- * - returns ONLY rows for SELECT
- * - returns ResultSetHeader for INSERT/UPDATE (includes insertId)
- * - avoids using pool.query() directly (which returns [rows, fields])
- */
+// ✅ Controllers expect query() to return ONLY rows / ResultSetHeader
 async function query(sql, params = []) {
   const [rows] = await pool.execute(sql, params);
   return rows;
