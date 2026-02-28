@@ -1,3 +1,4 @@
+// src/config/db.js
 const mysql = require("mysql2/promise");
 const env = require("./env");
 
@@ -12,4 +13,10 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-module.exports = pool;
+//  This is what all your controllers expect
+async function query(sql, params = []) {
+  const [rows] = await pool.execute(sql, params);
+  return rows;
+}
+
+module.exports = { pool, query };
