@@ -1,4 +1,3 @@
-// JubaHomez-API/src/config/db.js
 const mysql = require("mysql2/promise");
 const env = require("./env");
 
@@ -13,9 +12,9 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-// ✅ Controllers expect query() to return ONLY rows / ResultSetHeader
+// ✅ Wrapper used everywhere in your controllers
 async function query(sql, params = []) {
-  const [rows] = await pool.execute(sql, params);
+  const [rows] = await pool.query(sql, params);
   return rows;
 }
 
