@@ -1,5 +1,8 @@
+const path = require("path");
 const dotenv = require("dotenv");
-dotenv.config();
+
+//  Always load JubaHomez-API/.env even if command is run elsewhere
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 function must(name) {
   const v = process.env[name];
