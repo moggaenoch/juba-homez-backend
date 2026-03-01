@@ -1,8 +1,15 @@
+// src/config/env.js
 const path = require("path");
 const dotenv = require("dotenv");
 
-//  Always load JubaHomez-API/.env even if command is run elsewhere
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+// ✅ Load .env only for local development (Render uses Environment Variables)
+// This prevents production from accidentally using a different JWT_SECRET from a file.
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+}
+
+// If you want to support manual override (rare), you can also do:
+// if (process.env.DOTENV_PATH) dotenv.config({ path: process.env.DOTENV_PATH });
 
 function must(name) {
   const v = process.env[name];
