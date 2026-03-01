@@ -1,7 +1,10 @@
+// src/scripts/seedAdmin.js
+require("dotenv").config(); // ✅ add this line
+
 const bcrypt = require("bcryptjs");
 const { pool, query } = require("../config/db");
 
-async function main() {
+async function seedAdmin() {
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
 
@@ -9,7 +12,7 @@ async function main() {
   const phone = process.env.ADMIN_PHONE || "0000000000";
 
   if (!email || !password) {
-    console.error("❌ Missing ADMIN_EMAIL or ADMIN_PASSWORD in environment.");
+    console.error("❌ Missing ADMIN_EMAIL or ADMIN_PASSWORD in env vars.");
     process.exit(1);
   }
 
@@ -35,7 +38,7 @@ async function main() {
   await pool.end();
 }
 
-main().catch((e) => {
-  console.error("❌ seedAdmin failed:", e);
+seedAdmin().catch((err) => {
+  console.error("❌ seedAdmin error:", err);
   process.exit(1);
 });
