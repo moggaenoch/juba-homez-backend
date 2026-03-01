@@ -3,6 +3,25 @@ const { query } = require("../config/db");
 const { ok, created, fail } = require("../utils/responses");
 const { audit } = require("../services/audit.service");
 
+// ✅ Detect properties PK column at runtime (works with id / property_id / PropertyId / propertyId)
+let _PROPS_PK = null;
+async function propertiesPk() {
+  if (_PROPS_PK) return _PROPS_PK;
+
+  const cols = await query("SHOW COLUMNS FROM properties");
+  const names = cols.map((c) => String(c.Field));
+
+  const candidates = ["id", "property_id", "PropertyId", "propertyId"];
+  const found = candidates.find((c) => names.includes(c));
+
+  if (!found) {
+    throw fail(500, `Cannot detect properties primary key. Columns: ${names.join(", ")}`);
+  }
+
+  _PROPS_PK = found;
+  return _PROPS_PK;
+}
+
 const createSchema = Joi.object({
   title: Joi.string().min(3).max(120).required(),
   description: Joi.string().min(10).max(5000).required(),
@@ -35,6 +54,8 @@ const statusSchema = Joi.object({
 });
 
 async function listPublic(req, res) {
+  const pk = await propertiesPk();
+
   const {
     location,
     area,
@@ -83,16 +104,14 @@ async function listPublic(req, res) {
   const offset = (Number(page) - 1) * Number(limit);
 
   const countRows = await query(
-    `SELECT COUNT(*) as total
-     FROM properties p
-     WHERE ${where.join(" AND ")}`,
+    `SELECT COUNT(*) as total FROM properties p WHERE ${where.join(" AND ")}`,
     params
   );
   const total = countRows[0]?.total || 0;
 
+  // ✅ Always return "id" to frontend even if DB column is property_id/PropertyId
   const rows = await query(
-    `SELECT p.id, p.title, p.price, p.type, p.location, p.area, p.rooms, p.bathrooms,
-            p.created_at
+    `SELECT p.${pk} AS id, p.title, p.price, p.type, p.location, p.area, p.rooms, p.bathrooms, p.created_at
      FROM properties p
      WHERE ${where.join(" AND ")}
      ORDER BY p.${safeSortField} ${sortDir}
@@ -104,16 +123,18 @@ async function listPublic(req, res) {
 }
 
 async function getOnePublic(req, res) {
+  const pk = await propertiesPk();
   const id = Number(req.params.id);
 
+  // ✅ add "AS id" so frontend can always use property.id
   const rows = await query(
-    `SELECT p.*
+    `SELECT p.*, p.${pk} AS id
      FROM properties p
-     WHERE p.id = ? AND p.deleted_at IS NULL AND p.approval_status = 'approved'`,
+     WHERE p.${pk} = ? AND p.deleted_at IS NULL AND p.approval_status = 'approved'`,
     [id]
   );
-  if (!rows.length) throw fail(404, "Property not found");
 
+  if (!rows.length) throw fail(404, "Property not found");
   return ok(res, { property: rows[0] });
 }
 
@@ -121,7 +142,7 @@ async function areas(_req, res) {
   const rows = await query(
     "SELECT DISTINCT area FROM properties WHERE deleted_at IS NULL ORDER BY area ASC"
   );
-  return ok(res, { areas: rows.map(r => r.area) });
+  return ok(res, { areas: rows.map((r) => r.area) });
 }
 
 async function create(req, res) {
@@ -133,7 +154,7 @@ async function create(req, res) {
 
   const result = await query(
     `INSERT INTO properties
-      (title, description, price, type, status, approval_status, location, area, rooms, bathrooms, size, address, owner_id, broker_id)
+     (title, description, price, type, status, approval_status, location, area, rooms, bathrooms, size, address, owner_id, broker_id)
      VALUES (?,?,?,?,?,'pending',?,?,?,?,?,?,?,?)`,
     [
       body.title,
@@ -166,28 +187,35 @@ async function create(req, res) {
 }
 
 async function update(req, res) {
+  const pk = await propertiesPk();
   const id = Number(req.params.id);
 
   const fields = req.body;
   const keys = Object.keys(fields);
   if (!keys.length) throw fail(400, "No fields to update");
 
-  const setSql = keys.map(k => `${k} = ?`).join(", ");
-  const params = keys.map(k => fields[k]);
+  const setSql = keys.map((k) => `${k} = ?`).join(", ");
+  const params = keys.map((k) => fields[k]);
 
-  await query(`UPDATE properties SET ${setSql} WHERE id = ?`, [...params, id]);
+  await query(`UPDATE properties SET ${setSql} WHERE ${pk} = ?`, [...params, id]);
 
-  await audit({ actorId: req.user.id, action: "PROPERTY_UPDATED", entityType: "property", entityId: id });
+  await audit({
+    actorId: req.user.id,
+    action: "PROPERTY_UPDATED",
+    entityType: "property",
+    entityId: id
+  });
 
-  const rows = await query("SELECT * FROM properties WHERE id = ? LIMIT 1", [id]);
+  const rows = await query(`SELECT *, ${pk} AS id FROM properties WHERE ${pk} = ? LIMIT 1`, [id]);
   return ok(res, { property: rows[0] });
 }
 
 async function setStatus(req, res) {
+  const pk = await propertiesPk();
   const id = Number(req.params.id);
   const { status } = req.body;
 
-  await query("UPDATE properties SET status = ? WHERE id = ?", [status, id]);
+  await query(`UPDATE properties SET status = ? WHERE ${pk} = ?`, [status, id]);
 
   await audit({
     actorId: req.user.id,
@@ -201,11 +229,17 @@ async function setStatus(req, res) {
 }
 
 async function softDelete(req, res) {
+  const pk = await propertiesPk();
   const id = Number(req.params.id);
 
-  await query("UPDATE properties SET deleted_at = NOW() WHERE id = ?", [id]);
+  await query(`UPDATE properties SET deleted_at = NOW() WHERE ${pk} = ?`, [id]);
 
-  await audit({ actorId: req.user.id, action: "PROPERTY_DELETED", entityType: "property", entityId: id });
+  await audit({
+    actorId: req.user.id,
+    action: "PROPERTY_DELETED",
+    entityType: "property",
+    entityId: id
+  });
 
   return ok(res, { propertyId: id, deleted: true });
 }
