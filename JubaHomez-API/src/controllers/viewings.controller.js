@@ -4,6 +4,25 @@ const { ok, created, fail } = require("../utils/responses");
 const { audit } = require("../services/audit.service");
 const { notify } = require("../services/notification.service");
 
+// ✅ NEW: detect the properties PK column at runtime (id / property_id / PropertyId / propertyId)
+let _PROPS_PK = null;
+async function propertiesPk() {
+  if (_PROPS_PK) return _PROPS_PK;
+
+  const cols = await query("SHOW COLUMNS FROM properties");
+  const names = cols.map((c) => String(c.Field));
+
+  const candidates = ["id", "property_id", "PropertyId", "propertyId"];
+  const found = candidates.find((c) => names.includes(c));
+
+  if (!found) {
+    throw fail(500, `Cannot detect properties PK column. Found columns: ${names.join(", ")}`);
+  }
+
+  _PROPS_PK = found;
+  return _PROPS_PK;
+}
+
 const createRequestSchema = Joi.object({
   name: Joi.string().min(2).max(120).required(),
   email: Joi.string().email().required(),
@@ -11,7 +30,7 @@ const createRequestSchema = Joi.object({
   preferredDates: Joi.array().items(Joi.string().min(5).max(40)).max(10).optional(),
   message: Joi.string().max(2000).optional(),
 
-  // ✅ NEW: allow customer to choose broker vs owner (or explicit recipientUserId)
+  // ✅ allow customer to choose broker vs owner (or explicit recipientUserId)
   recipientRole: Joi.string().valid("broker", "owner").optional(),
   recipientUserId: Joi.number().integer().optional()
 });
@@ -36,10 +55,21 @@ async function createRequest(req, res) {
   const propertyId = Number(req.params.propertyId);
   const { name, email, phone, preferredDates, message, recipientRole, recipientUserId } = req.body;
 
+  if (!Number.isFinite(propertyId) || propertyId <= 0) {
+    throw fail(400, "Invalid propertyId");
+  }
+
+  // ✅ FIX: use detected PK instead of hardcoding "id"
+  const pk = await propertiesPk();
+
   const props = await query(
-    "SELECT id, title, owner_id, broker_id FROM properties WHERE id = ? AND deleted_at IS NULL LIMIT 1",
+    `SELECT p.${pk} AS id, p.title, p.owner_id, p.broker_id
+     FROM properties p
+     WHERE p.${pk} = ? AND p.deleted_at IS NULL
+     LIMIT 1`,
     [propertyId]
   );
+
   if (!props.length) throw fail(404, "Property not found");
 
   const p = props[0];
@@ -135,7 +165,7 @@ async function listRequestsMine(req, res) {
   const where = [];
   const params = [];
 
-  // ✅ NEW: show "my requests" for customers, otherwise show requests received (recipient)
+  // show "my requests" for customers, otherwise show requests received (recipient)
   if (u.role !== "admin") {
     if (u.role === "customer") {
       where.push("vr.requester_user_id = ?");
@@ -205,7 +235,6 @@ async function createViewingFromRequest(req, res) {
     meta: { requestId: vr.id, propertyId: vr.property_id, scheduledAt }
   });
 
-  // Notify customer
   if (vr.requester_user_id) {
     await notify({
       userId: vr.requester_user_id,
@@ -227,7 +256,7 @@ async function listViewings(req, res) {
   const where = [];
   const params = [];
 
-  // ✅ NEW: customers should see their own viewings by requester_user_id
+  // customers see their own viewings by requester_user_id
   if (u.role !== "admin") {
     if (u.role === "customer") {
       where.push("v.requester_user_id = ?");
@@ -276,7 +305,6 @@ async function reschedule(req, res) {
 
   const v = rows[0];
 
-  // ✅ NEW: allow customer (requester) OR broker/owner (recipient) OR admin
   const canEdit =
     u.role === "admin" ||
     v.recipient_user_id === u.id ||
@@ -295,7 +323,6 @@ async function reschedule(req, res) {
     meta: { reason, newScheduledAt, byRole: u.role }
   });
 
-  // Notify both sides (if they exist and are different)
   const recipients = new Set();
   if (v.requester_user_id) recipients.add(Number(v.requester_user_id));
   if (v.recipient_user_id) recipients.add(Number(v.recipient_user_id));
@@ -324,7 +351,6 @@ async function cancel(req, res) {
 
   const v = rows[0];
 
-  // ✅ NEW: allow customer (requester) OR broker/owner (recipient) OR admin
   const canEdit =
     u.role === "admin" ||
     v.recipient_user_id === u.id ||
@@ -343,7 +369,6 @@ async function cancel(req, res) {
     meta: { reason, byRole: u.role }
   });
 
-  // Notify both sides (if they exist and are different)
   const recipients = new Set();
   if (v.requester_user_id) recipients.add(Number(v.requester_user_id));
   if (v.recipient_user_id) recipients.add(Number(v.recipient_user_id));
